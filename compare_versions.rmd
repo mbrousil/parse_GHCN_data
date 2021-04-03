@@ -1,0 +1,58 @@
+#### Compare performance of the original function against the updated version
+
+```{r message=FALSE}
+library(tidyverse)
+library(microbenchmark)
+library(lubridate)
+library(compareDF)
+library(reshape2)
+library(kableExtra)
+source("parse_GHCN_data.R")
+source("parse_GHCN_data_orig.R")
+```
+
+##### Check outputs
+The outputs of the two functions differ slightly, so do a quick check to make sure that they can systematically be made equivalent for comparison:
+```{r error=TRUE}
+
+compare_versions <- compare_df(df_old = parse_GHCN_data("CA004010358.dly") %>%
+                                 mutate(across(.cols = c("year", "month", "value"),
+                                               .f = as.integer),
+                                        across(.cols = where(is.character),
+                                               .f = trimws)),
+                               df_new = parse_GHCN_data_new("CA004010358.dly") %>%
+                                 mutate(day = as.integer(day)),
+                               group_col = c("station", "year", "month", "variable", "day", "date"))
+
+```
+The original function leaves in whitespace where there are (purposeful) blanks, whereas the updated version running on `read_fwf` does not. Also needed to match up columns that are integer class.
+
+##### Check speed
+Ok, now compare the speeds both as-is, and with the corrections needed for equivalence
+```{r}
+# Compare process of making basic outputs for each
+basic <- microbenchmark(orig = parse_GHCN_data("CA004010358.dly"),
+                        updated = parse_GHCN_data_new("CA004010358.dly"),
+                        times = 100)
+```
+
+```{r echo=FALSE}
+summary(basic) %>% kbl() %>% kable_paper()
+
+```
+
+```{r}
+# Compare process of making making identical outputs for each
+matched <- microbenchmark(orig = parse_GHCN_data("CA004010358.dly") %>%
+                            mutate(across(.cols = c("year", "month", "value"),
+                                          .f = as.integer),
+                                   across(.cols = where(is.character), .f = trimws)),
+                          updated = parse_GHCN_data_new("CA004010358.dly") %>%
+                            mutate(day = as.integer(day)) %>%
+                            arrange(date),
+                          times = 100)
+```
+
+```{r echo=FALSE}
+summary(matched) %>% kbl() %>% kable_paper()
+```
